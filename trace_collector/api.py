@@ -3,7 +3,6 @@ from flask import abort, jsonify, make_response, request, send_from_directory
 from trace_collector import app, sessions
 from trace_collector.decorators import crossdomain
 
-
 @app.route('/worker.js', methods=['GET', 'OPTIONS'])
 @crossdomain(origin='*', headers=['Content-Type', 'If-Modified-Since'])
 def workerjs():
@@ -11,7 +10,7 @@ def workerjs():
                              'worker.js', mimetype='text/javascript')
 
 
-@app.route('/api/v1/upload', methods=['POST', 'OPTIONS'])
+@app.route('/api/v1/upload', methods=['POST', 'OPTIONS'], strict_slashes=False)
 @crossdomain(origin='*', headers=['Content-Type', 'If-Modified-Since'])
 def upload_data():
   data = request.json
@@ -20,7 +19,9 @@ def upload_data():
   if dataVersion == 1:
     for entry in data[2]:
       sessions.add_entry(sessionID, entry)
-    return jsonify([])
+    response = jsonify([])
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
   else:
     print ('WRONG DATA VERSION: %s' % dataVersion)
     abort(500)

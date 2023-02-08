@@ -1,13 +1,13 @@
 from trace_collector import events
 from trace_collector.views import heap, memory_layout, summary, log_messages
-
+import threading
 
 SESSIONS = {}
 
 
 def add_entry(sessionID, entry):
   session = SESSIONS.get(sessionID, None)
-  if not session:
+  if (not session or session is None):
     session = Session(sessionID)
     SESSIONS[sessionID] = session
   session.update(entry)
@@ -39,6 +39,7 @@ class Session(object):
     self.views['summary'] = summary.SummaryView(self.heapView)
     self.views['log_messages'] = log_messages.LogMessageView()
     self.context = ContextNode(None, 'Root', self)
+    self.context_lock = threading.Lock()
     ## Cached data ##
     self.peak_allocated = 0
 
@@ -65,6 +66,7 @@ class Session(object):
       return
     self.entries.append(entry)
     ### Update context ###
+    self.context_lock.acquire()
     if entry[0] == events.ENTER_CONTEXT:
       self.context = self.context.get_child(entry[2], self)
       self.context.enter(entry[1])
@@ -73,6 +75,7 @@ class Session(object):
       self.context = self.context.parent
     else:
       self.context.update(entry, self.heapView)
+    self.context_lock.release()
     ### Record errors ###
     if entry[0] == events.REPORT_ERROR:
       self.errors.append(SessionError(entry[1], entry[2], entry[3]))
