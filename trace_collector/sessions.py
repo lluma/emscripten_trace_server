@@ -133,6 +133,8 @@ class Session(object):
 
   def get_flattened_context_data(self):
     contexts = []
+    if self.context is None:
+          self.context = self.last_context
     self.add_context_data(contexts, self.context, 0)
     return contexts
 
