@@ -83,13 +83,11 @@ class Session(object):
         self.last_context = self.context
         self.context = self.context.get_child(entry[2], self)
         self.context.enter(entry[1])
-      elif entry[0] == events.EXIT_CONTEXT and self.context is not None:
+      elif entry[0] == events.EXIT_CONTEXT and self.context.parent is not None:
         self.last_context = self.context
         self.context.exit(entry[1])
         self.context = self.context.parent
       else:
-        if self.context is None:
-          self.context = self.last_context
         self.context.update(entry, self.heapView)
     except:
       pass
@@ -133,8 +131,6 @@ class Session(object):
 
   def get_flattened_context_data(self):
     contexts = []
-    if self.context is None:
-          self.context = self.last_context
     self.add_context_data(contexts, self.context, 0)
     return contexts
 
