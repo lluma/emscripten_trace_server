@@ -1,6 +1,5 @@
 from trace_collector import events
 from trace_collector.views import heap, memory_layout, summary, log_messages
-import threading
 
 SESSIONS = {}
 
@@ -39,7 +38,7 @@ class Session(object):
     self.views['summary'] = summary.SummaryView(self.heapView)
     self.views['log_messages'] = log_messages.LogMessageView()
     self.context = ContextNode(None, 'Root', self)
-    self.context_lock = threading.Lock()
+    self.last_context = None
     ## Cached data ##
     self.peak_allocated = 0
 
@@ -55,6 +54,19 @@ class Session(object):
 
 
   def update(self, entry):
+    '''
+    [in] entry (list): a session update element
+         entry[0]     |          entry[1]           |   entry[2]   |      entry[3]     
+    -----------------------------------------------------------------------------------
+    ALLOCATE          |   allocated timestamp       |   address    |   allocated bytes 
+    APPLICATION_NAME  |   application name          |      -       |        -          
+    ENTER_CONTEXT     |   context enter timestamp   | context name |        -          
+    EXIT_CONTEXT      |   context exit timestamp    |      -       |        -          
+    FREE              |   freed timestamp           |   address    |        -          
+    SESSION_NAME      |   session created time      |      -       |        -          
+    USER_NAME         |   username                  |      -       |        -          
+    '''
+    
     ### Some configuration options ... ###
     if entry[0] == events.APPLICATION_NAME:
       self.application = entry[1]
@@ -66,16 +78,21 @@ class Session(object):
       return
     self.entries.append(entry)
     ### Update context ###
-    self.context_lock.acquire()
-    if entry[0] == events.ENTER_CONTEXT:
-      self.context = self.context.get_child(entry[2], self)
-      self.context.enter(entry[1])
-    elif entry[0] == events.EXIT_CONTEXT:
-      self.context.exit(entry[1])
-      self.context = self.context.parent
-    else:
-      self.context.update(entry, self.heapView)
-    self.context_lock.release()
+    try:
+      if entry[0] == events.ENTER_CONTEXT:
+        self.last_context = self.context
+        self.context = self.context.get_child(entry[2], self)
+        self.context.enter(entry[1])
+      elif entry[0] == events.EXIT_CONTEXT and self.context is not None:
+        self.last_context = self.context
+        self.context.exit(entry[1])
+        self.context = self.context.parent
+      else:
+        if self.context is None:
+          self.context = self.last_context
+        self.context.update(entry, self.heapView)
+    except:
+      pass
     ### Record errors ###
     if entry[0] == events.REPORT_ERROR:
       self.errors.append(SessionError(entry[1], entry[2], entry[3]))
